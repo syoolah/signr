@@ -47,7 +47,7 @@ pub async fn run() -> Result<(), Error> {
         request_counter,
         remote,
     )
-        .await;
+    .await;
     Ok(())
 }
 
@@ -193,6 +193,19 @@ impl RemoteSigner {
 impl RemoteSigner {
     async fn request(&self, req: HsmRequest) -> Result<HsmResponse> {
         let request_id = req.request_id;
+
+        // Init is special: in stock c-lightning it triggers loading
+        // the secret from disk, here we loaded it when we initialized
+        // [`RemoteSigner`], and cached its `init` response. We could
+        // also call [`Hsmd::init`] again, but it'd just return the
+        // same as the first call since it's deterministic.
+        if req.raw[1] == 11 {
+            return Ok(HsmResponse {
+                request_id,
+                raw: self.init.clone(),
+            });
+        }
+
         let response = match req.context {
             None => self.instance.client(1027).handle(req.raw)?,
             Some(ctx) => self
